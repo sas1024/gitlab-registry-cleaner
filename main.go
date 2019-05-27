@@ -52,7 +52,7 @@ func main() {
 			continue
 		}
 
-		commits, _, err := git.Commits.ListCommits(p.ID, &gitlab.ListCommitsOptions{RefName: &cfg.CheckCommitsBranch})
+		commits, _, err := git.Commits.ListCommits(p.ID, &gitlab.ListCommitsOptions{ListOptions: gitlab.ListOptions{PerPage: 200}, RefName: &cfg.CheckCommitsBranch, All: &pTrue})
 
 		var filteredCommits []string
 
@@ -68,7 +68,7 @@ func main() {
 				die(err)
 			}
 
-			filtered := filter(tags, filteredCommits)
+			filtered := filter(tags, filterCommits(tags, commits))
 			filtered = filter(filtered, cfg.ExcludedTags)
 
 			for _, t := range filtered {
@@ -93,6 +93,18 @@ func filter(source []*gitlab.RegistryRepositoryTag, filter []string) (filtered [
 		}
 		if !found {
 			filtered = append(filtered, t)
+		}
+	}
+	return
+}
+
+func filterCommits(tags []*gitlab.RegistryRepositoryTag, commits []*gitlab.Commit) (filtered []string) {
+	for _, t := range tags {
+		for _, c := range commits {
+			if t.Name != c.ShortID {
+				continue
+			}
+			filtered = append(filtered, c.ShortID)
 		}
 	}
 	return
