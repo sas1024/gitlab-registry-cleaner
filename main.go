@@ -54,24 +54,27 @@ func main() {
 
 		commits, _, err := git.Commits.ListCommits(p.ID, &gitlab.ListCommitsOptions{ListOptions: gitlab.ListOptions{PerPage: 200}, RefName: &cfg.CheckCommitsBranch, All: &pTrue})
 
-		var filteredCommits []string
-
-		if len(commits) > cfg.CheckCommitsCount {
-			for _, c := range commits[:cfg.CheckCommitsCount] {
-				filteredCommits = append(filteredCommits, c.ShortID)
-			}
-		}
-
 		for _, r := range repositories {
 			tags, _, err := git.ContainerRegistry.ListRegistryRepositoryTags(p.ID, r.ID, nil)
 			if err != nil {
 				die(err)
 			}
 
-			filtered := filter(tags, filterCommits(tags, commits))
-			filtered = filter(filtered, cfg.ExcludedTags)
+			deleteTags := filter(tags, cfg.ExcludedTags)
 
-			for _, t := range filtered {
+			cc := commitsFromTags(tags, commits)
+			var filteredCommits []string
+			if len(cc) >= cfg.CheckCommitsCount {
+				for _, c := range cc[:cfg.CheckCommitsCount] {
+					filteredCommits = append(filteredCommits, c)
+				}
+			} else {
+				filteredCommits = cc
+			}
+
+			deleteTags = filter(deleteTags, filteredCommits)
+
+			for _, t := range deleteTags {
 				log.Println(fmt.Sprintf("Delete %s", t.Location))
 				_, err := git.ContainerRegistry.DeleteRegistryRepositoryTag(p.ID, r.ID, t.Name)
 				if err != nil {
@@ -86,8 +89,8 @@ func main() {
 func filter(source []*gitlab.RegistryRepositoryTag, filter []string) (filtered []*gitlab.RegistryRepositoryTag) {
 	for _, t := range source {
 		found := false
-		for _, c := range filter {
-			if t.Name == c {
+		for _, f := range filter {
+			if t.Name == f {
 				found = true
 			}
 		}
@@ -98,7 +101,7 @@ func filter(source []*gitlab.RegistryRepositoryTag, filter []string) (filtered [
 	return
 }
 
-func filterCommits(tags []*gitlab.RegistryRepositoryTag, commits []*gitlab.Commit) (filtered []string) {
+func commitsFromTags(tags []*gitlab.RegistryRepositoryTag, commits []*gitlab.Commit) (filtered []string) {
 	for _, t := range tags {
 		for _, c := range commits {
 			if t.Name != c.ShortID {
