@@ -2,5 +2,4 @@
 GitlabBaseUrl = "https://gitlab.com/api/v4"
 AuthToken = "some_token"
 ExcludedTags = ["latest", "devel", "production"]
-CheckCommitsBranch = "master"
-CheckCommitsCount = 4
+SaveRevisionCount = 4

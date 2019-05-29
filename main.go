@@ -5,23 +5,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/BurntSushi/toml"
 	"github.com/xanzy/go-gitlab"
 )
 
 type Config struct {
-	GitlabBaseUrl      string
-	AuthToken          string
-	ExcludedTags       []string
-	CheckCommitsBranch string
-	CheckCommitsCount  int
+	GitlabBaseUrl     string
+	AuthToken         string
+	ExcludedTags      []string
+	SaveRevisionCount int
 }
 
 var (
 	flConfigPath = flag.String("config", "config.toml", "Path to config file")
 	cfg          Config
 )
+
+type TagsList []*gitlab.RegistryRepositoryTag
+
+func (t TagsList) Len() int           { return len(t) }
+func (t TagsList) Less(i, j int) bool { return t[i].CreatedAt.Before(*t[j].CreatedAt) }
+func (t TagsList) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
 func main() {
 	flag.Parse()
@@ -46,33 +52,62 @@ func main() {
 
 	for _, p := range projects {
 
+		if p.Name != "desktop" {
+			continue
+		}
+
 		repositories, _, err := git.ContainerRegistry.ListRegistryRepositories(p.ID, nil)
 		if err != nil {
 			log.Println(fmt.Sprintf("Skip \"%s\" repository. Error: %v", p.Name, err))
 			continue
 		}
 
-		commits, _, err := git.Commits.ListCommits(p.ID, &gitlab.ListCommitsOptions{ListOptions: gitlab.ListOptions{PerPage: 200}, RefName: &cfg.CheckCommitsBranch, All: &pTrue})
-
 		for _, r := range repositories {
-			tags, _, err := git.ContainerRegistry.ListRegistryRepositoryTags(p.ID, r.ID, nil)
+			tt, _, err := git.ContainerRegistry.ListRegistryRepositoryTags(p.ID, r.ID, nil)
 			if err != nil {
 				die(err)
 			}
 
-			deleteTags := filter(tags, cfg.ExcludedTags)
-
-			cc := commitsFromTags(tags, commits)
-			var filteredCommits []string
-			if len(cc) >= cfg.CheckCommitsCount {
-				for _, c := range cc[:cfg.CheckCommitsCount] {
-					filteredCommits = append(filteredCommits, c)
+			var tags []*gitlab.RegistryRepositoryTag
+			for _, t := range tt {
+				tag, _, err := git.ContainerRegistry.GetRegistryRepositoryTagDetail(p.ID, r.ID, t.Name)
+				if err != nil {
+					die(err)
 				}
-			} else {
-				filteredCommits = cc
+				tags = append(tags, tag)
 			}
 
-			deleteTags = filter(deleteTags, filteredCommits)
+			excludedRevisions := make(map[string]bool)
+
+			for _, t := range tags {
+				for _, e := range cfg.ExcludedTags {
+					if e != t.Name {
+						continue
+					}
+					excludedRevisions[t.ShortRevision] = true
+				}
+			}
+
+			tags = filter(tags, cfg.ExcludedTags)
+
+			var filteredTags TagsList
+			for _, t := range tags {
+				if _, ok := excludedRevisions[t.ShortRevision]; !ok {
+					filteredTags = append(filteredTags, t)
+				}
+			}
+
+			sort.Sort(filteredTags)
+
+			if len(filteredTags) <= cfg.SaveRevisionCount {
+				// skip registry tags deletion
+				continue
+			}
+
+			var deleteTags TagsList
+			for _, t := range filteredTags[:len(filteredTags)-cfg.SaveRevisionCount] {
+				deleteTags = append(deleteTags, t)
+			}
 
 			for _, t := range deleteTags {
 				log.Println(fmt.Sprintf("Delete %s", t.Location))
@@ -96,18 +131,6 @@ func filter(source []*gitlab.RegistryRepositoryTag, filter []string) (filtered [
 		}
 		if !found {
 			filtered = append(filtered, t)
-		}
-	}
-	return
-}
-
-func commitsFromTags(tags []*gitlab.RegistryRepositoryTag, commits []*gitlab.Commit) (filtered []string) {
-	for _, t := range tags {
-		for _, c := range commits {
-			if t.Name != c.ShortID {
-				continue
-			}
-			filtered = append(filtered, c.ShortID)
 		}
 	}
 	return
