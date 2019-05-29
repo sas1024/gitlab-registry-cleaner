@@ -52,10 +52,6 @@ func main() {
 
 	for _, p := range projects {
 
-		if p.Name != "desktop" {
-			continue
-		}
-
 		repositories, _, err := git.ContainerRegistry.ListRegistryRepositories(p.ID, nil)
 		if err != nil {
 			log.Println(fmt.Sprintf("Skip \"%s\" repository. Error: %v", p.Name, err))
