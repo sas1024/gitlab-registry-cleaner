@@ -1,5 +1,5 @@
 
 GitlabBaseUrl = "https://gitlab.com/api/v4"
 AuthToken = "some_token"
-ExcludedTags = ["latest", "devel", "production"]
+ExcludedTags = ["latest", "devel", "production", "review-.*"]
 SaveRevisionCount = 4

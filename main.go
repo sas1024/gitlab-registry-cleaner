@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 
 	"github.com/BurntSushi/toml"
@@ -77,7 +78,8 @@ func main() {
 
 			for _, t := range tags {
 				for _, e := range cfg.ExcludedTags {
-					if e != t.Name {
+					found, _ := regexp.MatchString(e, t.Name)
+					if !found {
 						continue
 					}
 					excludedRevisions[t.ShortRevision] = true
@@ -121,9 +123,7 @@ func filter(source []*gitlab.RegistryRepositoryTag, filter []string) (filtered [
 	for _, t := range source {
 		found := false
 		for _, f := range filter {
-			if t.Name == f {
-				found = true
-			}
+			found, _ = regexp.MatchString(f, t.Name)
 		}
 		if !found {
 			filtered = append(filtered, t)
