@@ -45,7 +45,8 @@ func main() {
 	}
 
 	pTrue := true
-	opts := &gitlab.ListProjectsOptions{Membership: &pTrue}
+	pFalse := false
+	opts := &gitlab.ListProjectsOptions{ListOptions: gitlab.ListOptions{PerPage: 200}, Membership: &pTrue, Archived: &pFalse}
 	projects, _, err := git.Projects.ListProjects(opts)
 	if err != nil {
 		die(err)
