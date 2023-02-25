@@ -40,8 +40,7 @@ func main() {
 		die(err)
 	}
 
-	git := gitlab.NewClient(nil, cfg.AuthToken)
-	err = git.SetBaseURL(cfg.GitlabBaseUrl)
+	git, err := gitlab.NewClient(cfg.AuthToken, gitlab.WithBaseURL(cfg.GitlabBaseUrl))
 	if err != nil {
 		die(err)
 	}
@@ -55,13 +54,9 @@ func main() {
 	}
 
 	for _, p := range projects {
-		//if p.NameWithNamespace != "uteka / desktop" {
-		//	continue
-		//}
-
 		log.Println(p.NameWithNamespace)
 
-		repositories, _, err := git.ContainerRegistry.ListRegistryRepositories(p.ID, nil)
+		repositories, _, err := git.ContainerRegistry.ListProjectRegistryRepositories(p.ID, nil)
 		if err != nil {
 			log.Println(fmt.Sprintf("Skip \"%s\" repository. Error: %v", p.Name, err))
 			continue
